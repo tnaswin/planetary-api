@@ -10,11 +10,11 @@ from flask_mail import Mail, Message
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'planets.db')
-app.config['JWT_SECRET_KEY'] = 'super-secret'
+app.config['JWT_SECRET_KEY'] = 'super-secret'  # change this IRL
 app.config['MAIL_SERVER'] = 'smtp.mailtrap.io'
 app.config['MAIL_PORT'] = 2525
-app.config['MAIL_USERNAME'] = 'cfd239603d25b1'
-app.config['MAIL_PASSWORD'] = '21c844b60c0074'
+app.config['MAIL_USERNAME'] = os.environ['MAIL_USERNAME']
+app.config['MAIL_PASSWORD'] = os.environ['MAIL_PASSWORD']
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
 
@@ -110,7 +110,7 @@ def url_variables(name: str, age: int):
 def planets():
     planets_list = Planet.query.all()
     result = planets_schema.dump(planets_list)
-    return jsonify(result   )
+    return jsonify(result)
 
 
 @app.route('/register', methods=['POST'])
@@ -141,9 +141,9 @@ def login():
     test = User.query.filter_by(email=email, password=password).first()
     if test:
         access_token = create_access_token(identity=email)
-        return jsonify(message="Login successful!", access_token=access_token)
+        return jsonify(message="Login succeeded!", access_token=access_token)
     else:
-        return jsonify(message="Failed"), 401
+        return jsonify(message="Bad email or password"), 401
 
 
 @app.route('/retrieve_password/<string:email>', methods=['GET'])
@@ -151,12 +151,47 @@ def retrieve_password(email: str):
     user = User.query.filter_by(email=email).first()
     if user:
         msg = Message("your planetary API password is " + user.password,
-                      sender="admin@planetaryapi.com",
+                      sender="admin@planetary-api.com",
                       recipients=[email])
         mail.send(msg)
         return jsonify(message="Password sent to " + email)
     else:
-        return jsonify(message="Email doesn't exist."), 401
+        return jsonify(message="That email doesn't exist"), 401
+
+
+@app.route('/planet_details/<int:planet_id>', methods=["GET"])
+def planet_details(planet_id: int):
+    planet = Planet.query.filter_by(planet_id=planet_id).first()
+    if planet:
+        result = planet_schema.dump(planet)
+        return jsonify(result)
+    else:
+        return jsonify(message="That planet does not exist"), 404
+
+
+@app.route('/add_planet', methods=['POST'])
+def add_planet():
+    planet_name = request.form['planet_name']
+    test = Planet.query.filter_by(planet_name=planet_name).first()
+    if test:
+        return jsonify(message="Planet already exists."), 409
+    else:
+        planet_type = request.form['planet_type']
+        home_star = request.form['home_star']
+        mass = float(request.form['mass'])
+        radius = float(request.form['radius'])
+        distance = float(request.form['distance'])
+
+        new_planet = Planet(planet_name=planet_name,
+                            planet_type=planet_type,
+                            home_star=home_star,
+                            mass=mass,
+                            radius=radius,
+                            distance=distance)
+
+        db.session.add(new_planet)
+        db.session.commit()
+        return jsonify(message="You added a planet."), 201
 
 
 # database models
@@ -178,7 +213,6 @@ class Planet(db.Model):
     mass = Column(Float)
     radius = Column(Float)
     distance = Column(Float)
-
 
 class UserSchema(ma.Schema):
     class Meta:
